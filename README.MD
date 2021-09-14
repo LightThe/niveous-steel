@@ -12,7 +12,7 @@ Flag|Function
 
 ## How AES Works
 
-Get a 16 byte block
+Get a 16 byte block (state array)
 xor the round key
 for each step:
   substitute bytes (s-box)

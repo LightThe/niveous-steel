@@ -1,8 +1,9 @@
 #include<stdio.h>
+#include<stdint.h>
 
-#pragma region inferno
+#pragma region S-Boxes
 
-static const u_int8_t g_aes_sbox[256] = {
+static const uint8_t g_aes_sbox[256] = {
  /* 0     1     2     3     4     5     6     7     8     9     A     B     C     D     E     F  */
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
     0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
@@ -22,7 +23,7 @@ static const u_int8_t g_aes_sbox[256] = {
     0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
 };
 
-static const u_int8_t g_inv_sbox[256] = {
+static const uint8_t g_inv_sbox[256] = {
  /* 0     1     2     3     4     5     6     7     8     9     A     B     C     D     E     F  */
     0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb,
     0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e, 0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb,
@@ -44,61 +45,70 @@ static const u_int8_t g_inv_sbox[256] = {
 
 #pragma endregion
 
-//TODO: Generate s-boxes or whatever
+//TODO: Actually generate the S-Boxes
 
-void shift_word(u_int8_t word[4], int right){
-    u_int8_t temp;
+void shift_word(uint8_t word[], int right, int len){
+    uint8_t temp;
     if (right == 1){
-        temp = word[3];
-        word[3] = word[2];
-        word[2] = word[1];
-        word[1] = word[0];
+        temp = word[len-1];
+        for (int i = len-1; i > 0; i--){
+            word[i] = word[i-1];    
+        }
         word[0] = temp;
     }
     else{
-        temp = word[0];
-        word[0] = word[1];
-        word[1] = word[2];
-        word[2] = word[3];
-        word[3] = temp;
-    }
+        for (int i = 1; i < len; i++){
+            temp = word[i];
+            word[i] = word[(i+1)%len];
+            word[(i+1)%len] = temp;
+        }
+    }    
 }
 
-void rot_word(u_int8_t word[4]){ shift_word(word, 0); }
-void unrot_word(u_int8_t word[4]){ shift_word(word, 1); }
-
-void sub_word(u_int8_t word[4]){
-    for (int i = 0; i < 4; i++){
-        word[i] = g_aes_sbox[word[i]];
+void sub_bytes(uint8_t state[], int inv, int size){
+    for (int i = 0; i < size; i++){
+        if (inv!=1){
+            state[i] = g_aes_sbox[state[i]];
+        }
+        else{
+            state[i] = g_inv_sbox[state[i]];
+        }
     }
+    
 }
 
-void rcon_word(u_int8_t word[4], u_int8_t rcon_byte){ word[0] = word[0] ^ rcon_byte; }
+void rot_word(uint8_t word[4]){ shift_word(word, 0, 4); }
+void unrot_word(uint8_t word[4]){ shift_word(word, 1, 4); }
+void sub_word(uint8_t word[4]){ sub_bytes(word, 0, 4); }
+void rcon_word(uint8_t word[4], uint8_t rcon_byte){ word[0] = word[0] ^ rcon_byte; }
 
 int main(int argc, char **argv){
     
     //TODO: Get actual inputs
     char passphrase[16] = "Thats my kung fu";
     char message[] = "";
+    uint8_t block[16];
+    int aes_rounds = 10;
 
     // Key schedule
-    u_int8_t words[44][4]; // 44 words with 4 bytes each
+    uint8_t words[44][4]; // 44 words with 4 bytes each
     for (int i = 0; i < 16; i++){
         words[(int)i/4][i%4] = passphrase[i];
         //printf("words[%d][%d] = %c(%02x)\n", i/4, i%4, passphrase[i], passphrase[i]);
     }
 
-    u_int8_t test_word[4] = "1234";
+#pragma region teste
+    uint8_t test_word[7] = "1234567";
     printf("Word(hex): ");
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 7; i++)
     {
         printf("%02x ", test_word[i]);
     }
     printf("\n");
     
-    rot_word(test_word);
+    shift_word(test_word, 0, 7);
     printf("Word(rot): ");
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 7; i++)
     {
         printf("%02x ", test_word[i]);
     }
@@ -106,16 +116,17 @@ int main(int argc, char **argv){
 
     sub_word(test_word);
     printf("Word(sub): ");
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < 7; i++)
     {
         printf("%02x ", test_word[i]);
     }
     printf("\n");
+#pragma endregion
     
     // rcon-based key expansion
     int word_i = 0; // Word index, counts 4 words forward every round
-    for(u_int8_t rcon=1; rcon!=0x6c; rcon=(rcon<<1)^(0x11b&-(rcon>>7)) ){
-        printf("Word %d: rcon = 0x%02x\n ", word_i/4, rcon);
+    for(uint8_t rcon=1; rcon!=0x6c; rcon=(rcon<<1)^(0x11b&-(rcon>>7)) ){
+        
         // Copies w3 to w4 byte-by-byte
         words[word_i+4][0] = words[word_i+3][0];
         words[word_i+4][1] = words[word_i+3][1];
@@ -134,7 +145,7 @@ int main(int argc, char **argv){
         //for every other word wn, XOR wn-1 to wi+1
         for (int n = 5; n < 8; n++)
         {
-            printf("word[%d] = word[%d] ^ word[%d]\n", word_i+n, (word_i+n)-1, word_i+n-4);
+            //printf("word[%d] = word[%d] ^ word[%d]\n", word_i+n, (word_i+n)-1, word_i+n-4);
             words[word_i+n][0] = words[(word_i+n)-1][0] ^ words[word_i+n-4][0];
             words[word_i+n][1] = words[(word_i+n)-1][1] ^ words[word_i+n-4][1];
             words[word_i+n][2] = words[(word_i+n)-1][2] ^ words[word_i+n-4][2];
@@ -144,27 +155,29 @@ int main(int argc, char **argv){
     }
 
     // From here on, I should have a nice key schedule
-    for (int i = 0; i < 176; i++)
-    {
-        printf("words[%d][%d] = %c(%02x)\n", i/4, i%4, words[(int)i/4][i%4], words[(int)i/4][i%4]);
-    }
+    // for (int i = 0; i < 176; i++)
+    // {
+    //     printf("words[%d][%d] = %c(%02x)\n", i/4, i%4, words[(int)i/4][i%4], words[(int)i/4][i%4]);
+    // }
     
-    
-
     // State Control
-    u_int8_t block[16];
-    u_int8_t state[16];
+
+    uint8_t state[4][4];
     int shcedule_pos = 0;
 
     // First round key xor from schedule
-    // for (int i = 0; i < 16; i++)
-    // {
-    //     state[i] = block[i] ^ key_sched[shcedule_pos];
-    //     shcedule_pos++;
-    // }
+    for (int i = 0; i < 16; i++){
+        state[i%4][(int)i/4] = block[i] ^ words[shcedule_pos/4][shcedule_pos%4];
+        printf("state[%d][%d] = %02x\n", i%4, (int)i/4, state[i%4][(int)i/4]);
+        shcedule_pos++;
+    }
     
+    //run selected number of rounds
+    for (int round = 0; round < aes_rounds; round++){
+        //sub_bytes(state, 0, 16);
+        
+    }
 
-    
 
     //Main menu input
     // char option = 'Q';
