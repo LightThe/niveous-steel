@@ -1,5 +1,6 @@
 #include<stdio.h>
 #include<stdint.h>
+#define WRD_LEN 4
 
 #pragma region S-Boxes
 
@@ -88,7 +89,7 @@ int main(int argc, char **argv){
     char passphrase[16] = "Thats my kung fu";
     char message[] = "";
     uint8_t block[16];
-    int aes_rounds = 10;
+    int aes_rounds = 1;
 
     // Key schedule
     uint8_t words[44][4]; // 44 words with 4 bytes each
@@ -168,14 +169,32 @@ int main(int argc, char **argv){
     // First round key xor from schedule
     for (int i = 0; i < 16; i++){
         state[i%4][(int)i/4] = block[i] ^ words[shcedule_pos/4][shcedule_pos%4];
-        printf("state[%d][%d] = %02x\n", i%4, (int)i/4, state[i%4][(int)i/4]);
+        //printf("state[%d][%d] = %02x\n", i%4, (int)i/4, state[i%4][(int)i/4]);
         shcedule_pos++;
     }
     
-    //run selected number of rounds
+    //encrypt selected number of rounds
     for (int round = 0; round < aes_rounds; round++){
-        //sub_bytes(state, 0, 16);
-        
+        //subbytes
+        sub_bytes(state[0], 0, 16);
+
+        //shift state array
+        for (int i = 1; i <= 3; i++){
+            //shift line i (line 0 stays the same)
+            uint8_t line[4];
+            //copy current line from state
+            for (int j = 0; j < 3; j++){
+                line[j] = state[i][j];
+            }
+
+            shift_word(line, 0, WRD_LEN);
+
+            //copy line back to state
+            for (int j = 0; j < 3; j++){
+                state[i][j] = line[j];
+            }
+        }
+            
     }
 
 
@@ -183,7 +202,7 @@ int main(int argc, char **argv){
     // char option = 'Q';
     // while (option!='Q')
     // {
-    //     printf("Selecione a opcao desejada:\n Q - Sair do programa\nEscolha[Q]:");
+    //     printf("Selecione a opcao desejada:\n Q - Sair\nEscolha[Q]:");
     //     scanf("%c", &option);   
     // }
     
